@@ -10,7 +10,7 @@ public class SignupPage extends GenericMethods {
 
 	By signupButton = By.id("customer_register_link");
 	
-	public SignupPage(WebDriver driver, ExtentTest test) {
+	public SignupPage() {
 		super();
 	}
 

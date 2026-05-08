@@ -1,121 +1,94 @@
 package com.reports;
 
-
-import org.testng.annotations.BeforeTest;
-
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.WebDriver;
+import org.testng.ITestContext;
+import org.testng.ITestResult;
 import com.aventstack.extentreports.ExtentReports;
 import com.aventstack.extentreports.ExtentTest;
+import com.aventstack.extentreports.MediaEntityBuilder;
+import com.aventstack.extentreports.Status;
 import com.aventstack.extentreports.reporter.ExtentSparkReporter;
-import com.aventstack.extentreports.reporter.configuration.Theme;
 
 public class ExtentReportManager {
-	private static ExtentReports extent;
-    private static ExtentSparkReporter htmlReporter;
-    
-   
-   
-  
-    public static ExtentReports createExtentReport() {
-        if (extent == null) {
-            String reportPath = System.getProperty("user.dir") + "/test-output/ExtentReport.html";
-            htmlReporter = new ExtentSparkReporter(reportPath);
+	public static ExtentReports extent;
+	private static ThreadLocal<ExtentTest> testThread = new ThreadLocal<>();
+	private static String timestamp;
+	public static ExtentReports createExtentReport(ITestContext context) {
+		String suiteName = context.getSuite().getName();
+		if (extent == null) {
+			ExtentSparkReporter spark = new ExtentSparkReporter(createReportFolder()+"/"+suiteName+"_ExtentReport_"+timestamp+".html");
+			spark.config().setReportName("Automation Report");
+			spark.config().setDocumentTitle("Test Results");
 
-            htmlReporter.config().setTheme(Theme.STANDARD);
-            htmlReporter.config().setDocumentTitle("Sauce Demo Test Report");
-            htmlReporter.config().setReportName("Sauce Demo Automation Test Report");
-            htmlReporter.config().setEncoding("UTF-8");
+			extent = new ExtentReports();
+			extent.attachReporter(spark);
+		}
 
-            htmlReporter.config().setCss(
-                "#custom-report-header {" +
-                "   background-color: #ffffff;" +
-                "   padding: 15px 20px;" +
-                "   border-bottom: 3px solid #00b4d8;" +
-                "   border-top: 3px solid #00b4d8;" +
-                "   width: 100%;" +
-                "   box-sizing: border-box;" +
-                "   position: sticky !important;" +
-                "   top: 0 !important;" +
-                "   z-index: 99999 !important;" +
-                "   display: block !important;" +
-                "}" +
-                "#custom-report-header h2 {" +
-                "   color: #00b4d8; font-size: 20px; margin: 0 0 10px 0; padding-left: 10px;" +
-                "}" +
-                "#custom-report-header table {" +
-                "   border-collapse: collapse; margin-left: 10px; width: 70%;" +
-                "}" +
-                "#custom-report-header table td {" +
-                "   color: #444444; font-size: 13px; padding: 4px 40px 4px 0; text-align: left;" +
-                "}" +
-                "#custom-report-header table td b { color: #111111; }"
-            );
+		return extent;
+	}
 
-            // ✅ Use a JS variable placeholder — value injected later via updateBrowserInfo()
-            htmlReporter.config().setJs(
-                // ✅ Browser value stored in a JS variable — updated dynamically
-                "var browserName = 'Loading...';" +
+	public static void updateTestResult(ITestResult result, WebDriver driver) {
+		if (result.getStatus() == ITestResult.FAILURE) {
+			try {
+				// ✅ getDriver() — thread safe
+				String base64 = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BASE64);
 
-                "function buildHeaderHTML() {" +
-                "   return '<h2>&#x1F680; Sauce Demo Automation Test Report</h2>' +" +
-                "       '<table>' +" +
-                "           '<tr>' +" +
-                "               '<td><b>Project:</b></td><td>Sauce Demo E-Commerce Application</td>' +" +
-                "               '<td><b>Tester:</b></td><td>Venkatesh Thatha</td>' +" +
-                "           '</tr>' +" +
-                "           '<tr>' +" +
-                "               '<td><b>Environment:</b></td><td>Production</td>' +" +
-                "               '<td><b>OS:</b></td><td>" + System.getProperty("os.name") + "</td>' +" +
-                "           '</tr>' +" +
-                "           '<tr>' +" +
-                // ✅ Reads JS variable at render time — not Java compile time
-                "               '<td><b>Browser:</b></td><td>' + browserName + '</td>' +" +
-                "               '<td><b>Execution Date:</b></td><td>" + new java.util.Date() + "</td>' +" +
-                "           '</tr>' +" +
-                "       '</table>';" +
-                "}" +
+				// ✅ getTest() — thread safe
+				getTest().log(Status.FAIL, "Test Case Failed : " + result.getMethod().getMethodName());
+				getTest().log(Status.FAIL, "Reason : " + result.getThrowable().getMessage());
+				getTest().fail("Failure Screenshot : ",
+						MediaEntityBuilder.createScreenCaptureFromBase64String(base64).build());
 
-                "function injectHeader() {" +
-                "   var existing = document.getElementById('custom-report-header');" +
-                "   if (existing && document.body.firstChild === existing) return;" +
-                "   if (existing) existing.remove();" +
-                "   var h = document.createElement('div');" +
-                "   h.id = 'custom-report-header';" +
-                "   h.innerHTML = buildHeaderHTML();" +  // ✅ rebuilt each time with latest browserName
-                "   document.body.insertBefore(h, document.body.firstChild);" +
-                "}" +
+			} catch (Exception e) {
+				log(Status.FAIL, "❌ FAILED : " + result.getThrowable().getMessage());
+			}
 
-                "window.addEventListener('load', function() {" +
-                "   injectHeader();" +
-                "   setInterval(injectHeader, 300);" +
-                "});"
-            );
+		} else if (result.getStatus() == ITestResult.SUCCESS) {
+			log(Status.PASS, "✅ Test PASSED");
 
-            extent = new ExtentReports();
-            extent.attachReporter(htmlReporter);
-        }
-        return extent;
-    }
-    
-    // ✅ Injects browser name into the live HTML report via a <script> tag
-    public static void updateBrowserInfo(String browser) {
-        if (extent != null && htmlReporter != null) {
-            // ✅ Override the JS variable with actual browser value
-            htmlReporter.config().setJs(
-                htmlReporter.config().getJs() +
-                // Appended script updates the JS variable in the page
-                "var browserName = '" + browser + "';" +
-                "injectHeader();"
-            );
-        }
-    }
-    public static ExtentTest createTest(String testName) {
-        return extent.createTest(testName);
-    }
-    
-    
+		} else if (result.getStatus() == ITestResult.SKIP) {
+			log(Status.SKIP, "⚠️ Test SKIPPED : " + result.getThrowable().getMessage());
+		}
+	}
 
-    // Close the report
-    public static void closeReport() {
-        extent.flush();
-    }
+	// Create test
+	public static void createTest(String testName) {
+
+		ExtentTest test = extent.createTest(testName);
+		testThread.set(test);
+	}
+
+	// Get test
+	public static ExtentTest getTest() {
+
+		return testThread.get();
+	}
+
+	public static void log(Status status, String message) {
+		if (getTest() != null) { // ✅ getTest()
+			getTest().log(status, message);
+		}
+	}
+	
+	 public static String createReportFolder() {
+		 
+            timestamp =new SimpleDateFormat("dd_MM_yyyy_HH_mm_ss").format(new Date());        
+	         // reports/08_05_2026
+	        String folderPath = "reports/"+new SimpleDateFormat("dd_MM_yyyy").format(new Date());
+
+	        File folder = new File(folderPath);
+	         // Create folder if not exists
+	        if (!folder.exists()) {
+
+	            folder.mkdirs();
+	        }
+
+	        return folderPath;
+	    }
+
 }
