@@ -1,9 +1,6 @@
 package pageobjects;
 
 import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-
-import com.aventstack.extentreports.ExtentTest;
 import com.generic.library.GenericMethods;
 
 public class SignupPage extends GenericMethods {
